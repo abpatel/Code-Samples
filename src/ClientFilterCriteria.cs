@@ -24,6 +24,7 @@ namespace ConsoleClient
         IList<OrderBy> OrderByAttributes { get; set; }
         int? Skip { get; set; }
         int? Take { get; set; }
+        string ToString();
     }
 
     public class CriteriaBuilder<T> where T : class,new()
@@ -182,6 +183,52 @@ namespace ConsoleClient
             mock.Setup(m => m.AttributeValuesToMatchAgainst).Returns(entityFilter);
             mock.Setup(m => m.ToString()).Returns(GetCriteriaString());
             return mock.Object;
+        }
+    }
+
+    public class Product
+    {
+        public string Name { get; set; }
+        public double Price { get; set; }
+        public string Category { get; set; }
+    }
+    
+    public class Proxy
+    {
+        Uri baseuri = null;
+        public Proxy(string url)
+        {
+            this.baseuri = new Uri(url);
+        }
+        public T Fetch<T>(string id) where T : class
+        {
+            return null;
+        }
+
+        public IEnumerable<T> Fetch<T>(ICriteria<T> criteria)
+        {
+            string criteriaString = criteria.ToString();
+            string endpointURI = string.Concat(baseuri.AbsoluteUri, typeof(T).Name, criteriaString);
+            //use the generated endpointURI to make the call
+            return null;
+        }
+    }
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            CriteriaBuilder<Product> builder = new CriteriaBuilder<Product>();
+            builder
+             .AddFilter(x => x.Name == "test")
+             .AddFilter(x => x.Price == 100)
+             .LoadAttribute(x => x.Name)
+             .OrderByAscending(x => x.Name)
+             .OrderByDescending(x => x.Category);
+            var criteria = builder.Build();
+
+            Proxy proxy = new Proxy("http://locahost:2311/api/");
+            proxy.Fetch<Product>(criteria);
         }
     }
 }
