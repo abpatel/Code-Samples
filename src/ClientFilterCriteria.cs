@@ -17,40 +17,65 @@ namespace ConsoleClient
         }
     }
 
-    public interface ICriteria<T>
+    public class Query<T> where T : class,new()
     {
-        T AttributeValuesToMatchAgainst { get; set; }
-        string[] AttributesToLoad { get; set; }
-        IList<OrderBy> OrderByAttributes { get; set; }
-        int? Skip { get; set; }
-        int? Take { get; set; }
-        string ToString();
-    }
+        private Uri baseUri = null;
+        private List<string> attributesToLoad = new List<string>();
+        private T entityFilter = default(T);
+        private List<OrderBy> orderbys = new List<OrderBy>();
+        private int? skip = null;
+        private int? take = null;
+        private List<string> filterAttributes = new List<string>();
+        private SelectCriteria select;
+        private FilterCriteria where;
+        private OrderByCriteria order;
 
-    public class CriteriaBuilder<T> where T : class,new()
-    {
         public class ThenOrderBy
         {
-            OrderByCriteria orderby;
+            OrderByCriteria orderBy;
             public ThenOrderBy(OrderByCriteria orderby)
             {
-                this.orderby = orderby;
+                this.orderBy = orderby;
             }
 
             public OrderByCriteria ThenBy
             {
                 get
                 {
-                    return orderby;
+                    return orderBy;
                 }
+            }
+
+            public Query<T> Skip(int skip)
+            {
+                orderBy.Criteria.Skip(skip);
+                return orderBy.Criteria;
+            }
+
+            public Query<T> Take(int take)
+            {
+                orderBy.Criteria.Take(take);
+                return orderBy.Criteria;
+            }
+
+            private Query<T> Criteria
+            {
+                get
+                {
+                    return orderBy.Criteria;
+                }
+            }
+            public static implicit operator Query<T>(ThenOrderBy orderBy)
+            {
+                return orderBy.Criteria;
             }
         }
 
         public class OrderByCriteria
         {
-            CriteriaBuilder<T> criteria;
+            Query<T> criteria;
             ThenOrderBy thenorderby;
-            public OrderByCriteria(CriteriaBuilder<T> criteria)
+            public OrderByCriteria(Query<T> criteria)
             {
                 this.criteria = criteria;
                 this.thenorderby = new ThenOrderBy(this);
@@ -96,8 +121,8 @@ namespace ConsoleClient
 
         public class AndCondition
         {
-            CriteriaBuilder<T> criteria;
-            public AndCondition(CriteriaBuilder<T> criteria)
+            Query<T> criteria;
+            public AndCondition(Query<T> criteria)
             {
                 this.criteria = criteria;
             }
@@ -118,16 +143,41 @@ namespace ConsoleClient
                 }
             }
 
+            public Query<T> Skip(int skip)
+            {
+                Criteria.Skip(skip);
+                return Criteria;
+            }
+
+            public Query<T> Take(int take)
+            {
+                Criteria.Take(take);
+                return Criteria;
+            }
+
+            private Query<T> Criteria
+            {
+                get { return criteria; }
+            }
+
+            public static implicit operator Query<T>(AndCondition and)
+            {
+                return and.Criteria;
+            }
         }
 
         public class FilterCriteria
         {
-            CriteriaBuilder<T> criteria;
+            Query<T> criteria;
             AndCondition andCondition;
-            public FilterCriteria(CriteriaBuilder<T> criteria)
+            public FilterCriteria(Query<T> criteria)
             {
                 this.criteria = criteria;
                 this.andCondition = new AndCondition(criteria);
+            }
+            private Query<T> Criteria
+            {
+                get { return criteria; }
             }
 
             public AndCondition ConditionIs(Expression<Func<T, object>> filter)
@@ -164,9 +214,9 @@ namespace ConsoleClient
 
         public class SelectCriteria
         {
-            CriteriaBuilder<T> criteria;
+            Query<T> criteria;
 
-            public SelectCriteria(CriteriaBuilder<T> criteria)
+            public SelectCriteria(Query<T> criteria)
             {
                 this.criteria = criteria;
             }
@@ -208,26 +258,39 @@ namespace ConsoleClient
                     return criteria.OrderBy;
                 }
             }
+
+            public Query<T> Skip(int skip)
+            {
+                Criteria.Skip(skip);
+                return Criteria;
+            }
+
+            public Query<T> Take(int take)
+            {
+                Criteria.Take(take);
+                return Criteria;
+            }
+
+            private Query<T> Criteria
+            {
+                get { return criteria; }
+            }
+
+            public static implicit operator Query<T>(SelectCriteria select)
+            {
+                return select.Criteria;
+            }
         }
 
-        List<string> attributesToLoad = new List<string>();
-        T entityFilter = default(T);
-        List<OrderBy> orderbys = new List<OrderBy>();
-        int? skip = null;
-        int? take = null;
-        List<string> filterAttributes = new List<string>();
-        SelectCriteria select;
-        FilterCriteria where;
-        OrderByCriteria order;
-
-        public CriteriaBuilder()
+        public Query(Uri serviceUri)
         {
+            this.baseUri = serviceUri;
             this.select = new SelectCriteria(this);
             this.where = new FilterCriteria(this);
             this.order = new OrderByCriteria(this);
         }
 
-        public SelectCriteria Load
+        public SelectCriteria Select
         {
             get
             {
@@ -251,6 +314,18 @@ namespace ConsoleClient
             }
         }
 
+        public Query<T> Skip(int skip)
+        {
+            this.skip = skip;
+            return this;
+        }
+
+        public Query<T> Take(int take)
+        {
+            this.take = take;
+            return this;
+        }
+
         private string GetFilterStringForAttribute(string attribute)
         {
             var propInfo = typeof(T).GetProperty(attribute);
@@ -259,7 +334,7 @@ namespace ConsoleClient
             return string.Format(formatStringForValue, attribute, value);
         }
 
-        public string GetCriteriaString()
+        public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("?");
@@ -271,9 +346,10 @@ namespace ConsoleClient
             }
             if (filterAttributes.Count > 0)
             {
-                string filter = string.Concat("$filter=",
-                    filterAttributes.Aggregate((s1, s2) => string.Format("{0},{1}", GetFilterStringForAttribute(s1), GetFilterStringForAttribute(s2))), "&");
-                sb.Append(filter);
+                var filterAttributesString = filterAttributes.Select(a => GetFilterStringForAttribute(a));
+                string concatenatedFilterAttributesString = string.Concat("$filter=",
+                    filterAttributesString.Aggregate((s1, s2) => string.Format("{0} and {1}", s1, s2)), "&");
+                sb.Append(concatenatedFilterAttributesString);
             }
             if (orderbys.Count > 0)
             {
@@ -285,37 +361,79 @@ namespace ConsoleClient
             return sb.ToString();
         }
 
-        public ICriteria<T> Build()
+        private async Task<U> FetchInternal<U>(string url) where U : class
         {
-            var mock = new Moq.Mock<ICriteria<T>>();
-            mock.Setup(m => m.Skip).Returns(skip);
-            mock.Setup(m => m.Take).Returns(take);
-            mock.Setup(m => m.AttributesToLoad).Returns(attributesToLoad.ToArray());
-            mock.Setup(m => m.OrderByAttributes).Returns(orderbys);
-            mock.Setup(m => m.AttributeValuesToMatchAgainst).Returns(entityFilter);
-            mock.Setup(m => m.ToString()).Returns(GetCriteriaString());
-            return mock.Object;
+            HttpClient client = new HttpClient();
+            client.BaseAddress = new Uri(url);
+
+            // Add an Accept header for JSON format. 
+            client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+            // List all products. 
+            HttpResponseMessage response = await client.GetAsync(url);  // Blocking call! 
+
+            U item = default(U);
+            if (response.IsSuccessStatusCode)
+            {
+                // Parse the response body. Blocking! 
+                item = await response.Content.ReadAsAsync<U>();
+            }
+            return item;
+        }
+
+        public IEnumerable<T> Execute()
+        {
+            string endpointUrl = string.Concat(baseUri.AbsoluteUri, typeof(T).Name + "s", this.ToString());
+            var results = FetchInternal<IEnumerable<T>>(endpointUrl).Result;
+            foreach (var item in results)
+            {
+                yield return item;
+            }
         }
     }
 
-    public class Proxy
+    class Context
     {
-        Uri baseuri = null;
-        public Proxy(string url)
+
+        Uri uri = null;
+        public Context(string uri)
         {
-            this.baseuri = new Uri(url);
-        }
-        public T Fetch<T>(string id) where T : class
-        {
-            return null;
+            this.uri = new Uri(uri);
         }
 
-        public IEnumerable<T> Fetch<T>(ICriteria<T> criteria)
+        private async Task<U> FetchInternal<U>(string url) where U : class
         {
-            string criteriaString = criteria.ToString();
-            string endpointURI = string.Concat(baseuri.AbsoluteUri, typeof(T).Name, criteriaString);
-            //use the generated endpointURI to make the call
-            return null;
+            HttpClient client = new HttpClient();
+            client.BaseAddress = new Uri(url);
+
+            // Add an Accept header for JSON format. 
+            client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+            // List all products. 
+            HttpResponseMessage response = await client.GetAsync(url);  // Blocking call! 
+
+            U item = default(U);
+            if (response.IsSuccessStatusCode)
+            {
+                // Parse the response body. Blocking! 
+                item = await response.Content.ReadAsAsync<U>();
+            }
+            return item;
+        }
+
+        public Query<T> CreateQuery<T>() where T : class, new()
+        {
+            return new Query<T>(uri);
+        }
+
+        public IEnumerable<T> Execute<T>(Query<T> query) where T : class, new()
+        {
+            string endpointUrl = string.Concat(uri.AbsoluteUri, typeof(T).Name + "s", query.ToString());
+            var results = FetchInternal<IEnumerable<T>>(endpointUrl).Result;
+            foreach (var item in results)
+            {
+                yield return item;
+            }
         }
     }
 
@@ -330,18 +448,16 @@ namespace ConsoleClient
     {
         static void Main(string[] args)
         {
-            CriteriaBuilder<Product> builder = new CriteriaBuilder<Product>();
-            builder.Load.Attribute(x => x.Name)
-                        .Attribute(x => x.Category)
-                    .Where.ConditionIs(x => x.Name == "test")
-                    .And.ConditionIs(x => x.Category == "test")
-                    .And.ConditionIs(x => x.Price == 100)
-                    .OrderBy.Ascending(x => x.Price)
-                    .ThenBy.Descending(x => x.Category);
-            var criteria = builder.Build();
-
-            Proxy proxy = new Proxy("http://locahost:2311/api/");
-            proxy.Fetch<Product>(criteria);
+            Context ctx = new Context(@"http://localhost:14379/api/");
+            var query = ctx.CreateQuery<Product>()
+                            .Select.Attribute(x => x.Name)
+                            .Attribute(x => x.Category)
+                            .Where.ConditionIs(x => x.Name == "test")
+                            .And.ConditionIs(x => x.Category == "test")
+                            .And.ConditionIs(x => x.Price == 100)
+                            .OrderBy.Ascending(x => x.Price)
+                            .ThenBy.Descending(x => x.Category);
+            var l = ctx.Execute(query);
         }
     }
 }
