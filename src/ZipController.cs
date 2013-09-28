@@ -1,17 +1,20 @@
+   using AttributeRouting;
+   using AttributeRouting.Web.Http;
+   using AutoMapper;
+
    public class ZipDistanceDTO
     {
         public string ZipPairs { get; set; }
-        public string Distances { get; set; }
+        public string Distance { get; set; }
     }
     public class ZipDistance
     {
         public string ZipPairs { get; set; }
-        public string Distances { get; set; }
+        public string Distance { get; set; }
     }
     [RoutePrefix("api")]
     public class ZipDistancesController : ApiController
     {
-       
         // If you are using Dependency Injection, you can delete the following constructor
         public ZipDistancesController()
         {
@@ -19,7 +22,8 @@
         }
 
         private void SetupMaps()
-        {           
+        {
+            //Setup AutoMapper
             Mapper.CreateMap<Models.ZipDistance, DTOs.ZipDistanceDTO>();
             Mapper.CreateMap<DTOs.ZipDistanceDTO, ZipDistance>();
 
@@ -28,8 +32,7 @@
         [GET("ZipDistances", RouteName = "GetZipDistances")]
         public IEnumerable<ZipDistanceDTO> GetZipDistances(ODataQueryOptions<ZipDistanceDTO> options)
         {
-             //Sample calls:
-            //ZipDistances?$select=Distance&$filter=Pairs eq 'Zip1 eq 13240 and Zip2 eq 90210,Zip1 eq 13241 and Zip2 eq 90211'
+            //http://<host>/api/ZipDistances?$select=Distance&$filter=Pairs eq 'Zip1 eq 13240 and Zip2 eq 90210,Zip1 eq 13241 and Zip2 eq 90211'
             //ZipDistances?$select=Distance&$filter=Pairs%20eq%20'Zip1%20eq%2013240%20and%20Zip2%20eq%2090210,Zip1%20eq%2013241%20and%20Zip2%20eq%2090211'
 
             options.Validate(new ODataValidationSettings{ AllowedQueryOptions= AllowedQueryOptions.Select| AllowedQueryOptions.Filter, AllowedLogicalOperators = AllowedLogicalOperators.And| AllowedLogicalOperators.Equal});
@@ -49,7 +52,7 @@
             var zipDistances = 
                 tupleZipPairs
                 .Select(t => 
-                    new ZipDistance { ZipPairs = t.RawValues, Distances = GetDistance(t.Tuple.Item1,t.Tuple.Item2) })
+                    new ZipDistance { ZipPairs = t.RawValues, Distance = GetDistance(t.Tuple.Item1,t.Tuple.Item2) })
                  .ToArray();
 
             var mappedZipDistances = Mapper.Map<Models.ZipDistance[], DTOs.ZipDistanceDTO[]>(zipDistances);
