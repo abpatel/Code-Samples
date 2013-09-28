@@ -11,8 +11,7 @@
     [RoutePrefix("api")]
     public class ZipDistancesController : ApiController
     {
-        private readonly IContactsRepository contactRepository;
-
+       
         // If you are using Dependency Injection, you can delete the following constructor
         public ZipDistancesController()
         {
