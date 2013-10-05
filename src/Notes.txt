@@ -1,0 +1,62 @@
+- ZipDistance
+  Concerns:
+  a) Use of POST verb to get data instead of  GET verb in Controller
+  b) Does not work with client SDK
+  c) Uses looping on server side for sproc call
+  d)Controller loops over results to create DTOs and does not use AutoMapper
+  Resolution:
+ a) Use a "Query" resource to enable multiple queries in one call
+    -Involves POSTing a collection of "ZipDistancesDtos" to the "ZipDistanceQuery" 
+     endpoint which returns an ID of the "query" resource
+    -Issue a GET agaist "ZipDistanceQueryResults" endpoint to fetch the results
+ b) This confirms to REST architecture and does not overload the meaning of POST and GET
+ c) Works well with our client SDK
+
+-OptionSet
+ Concerns:
+ a) "OptionSet" is a MSCRM specific artifact (REST layer is CRM agnostic)
+ b) The name property accepts the optionset name in th format "entityname.optionsetname"
+    which breaks querying
+ c) ID property is an int and deviates from other DTOs
+ d)Controller loops over results to create DTOs and does not use AutoMapper
+  Resolution:
+ a) Renames OptionSet to "EnumerationValue" 
+ b) Introduced an "EntityName" and "EnumerationOf" property to identify the entity and option set name to query
+    which allows for OData syntax for querying. "EntityName" is not specified For Global Otpion Sets 
+ c) Works well with client SDK
+
+-Appointments
+ Concerns:
+ a) AppointmentFetchHandler is not OData compliant(compare to the other Handlers)
+ b) Attribute Map is not uses to map between CRM and our Data model types
+ c) Appointment DataModel and Dtos are not flat, our architecture uses flat DTOs to facilitate OData querying 
+ d) Controller needs to expose 'Attendees' as a subresource similar to the other endpoints:
+    Example: Contactd/<id>/Incidents
+ Resolution:
+ a) Refatored AppointmentFetchHandler to use FilterCriteria and AttributeMap similar to other entity fetch Handlers
+    for OData compliance
+ b) Flattened Appointment  DataModel and Dto classes for OData compliance and facilitate Client SDK querying
+ c) Renamed "RequiredAttendee" to "Attendee" and added an AppointmentID property on DataModel and DTO
+ d) Refactored AppointmentUpsertHandler (removed processing of attendees)
+ e) Refactored AppointmentsController to support OData and exposed Attendees as a sub resource
+ f) Added AttendeeController
+    Examples: 
+     GET     api/Appointments/<id>
+             api/Appointments/<id>?$select=(whatever)
+             api/ppointments/<id>/Attendees
+             OData: api/Appointments/$select=(whatever)&$filter=(whatever)
+     POST   api/Appointments/
+             {
+               "TopazId":"1234",
+               "Subject":"Whatever",
+               "StartDate":"somedate",
+               "EndDate":"somedate",
+	       "Location":"somewhere"
+             }
+            api/Appointments/<id>/Attendees
+            api/Attendees/
+           	{
+                  "AppointmentId":"1234",   		<-- This can be the TopazID or the actual GUID of the appointment
+                  "Id":"entityguid"           		<-- ID of the entity
+                  "EntityLogicalName":"entityname       <-- "contact"/ "ssytemuser" etc.
+		}
