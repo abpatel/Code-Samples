@@ -73,3 +73,9 @@ c) Simplifies querying via our client SDK.
                   "Id":"entityguid"           		<-- ID of the entity
                   "EntityLogicalName":"entityname       <-- "contact"/ "ssytemuser" etc.
 		}
+  Questions:
+  1) Should we expose both State and Status on "Appointment"?
+     UpsertHandler has code to set state to "Completed" but the call to CRM is commented out
+  2) ActivityManagementBRSetState plugin throws an error indicating regardingId is not set.
+     Not sure why this is happening when SetState is invoked with a state and status of "Completed"
+  3) 
